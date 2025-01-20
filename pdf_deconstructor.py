@@ -5,6 +5,7 @@ import os
 import spacy
 import pandas as pd
 import json
+from elasticsearch import Elasticsearch, helpers
 
 
 # # Convert PDF to images (one per page)
@@ -32,7 +33,6 @@ def process_pdf(pdf_filename):
     else:
         raise FileNotFoundError(f"PDF file {pdf_filename} not found in the project directory.")
 
-import json
 
 def tokenize_tag(extracted_text, title):
     nlp = spacy.load("en_core_web_sm")
@@ -72,9 +72,41 @@ def get_substring_at_positions(text, start_pos, end_pos):
 
 # test_string = "Hello my name is Alec and im a student at UCR. i HAVE  a friend who use to go to UCR, his name is Michael. Michael is a cool dude. His name is Michael"
 pdf_filename = 'Blackholes-test00.pdf'
-extracted_text = process_pdf(pdf_filename)
+# extracted_text = process_pdf(pdf_filename)
 
 #this will be able to retireve the char at a position
-print(get_substring_at_positions(extracted_text[0], 50181, 50184))
+# print(get_substring_at_positions(extracted_text[0], 50181, 50184))
 # print(extracted_text[1])
 
+# This will be the elastic portion to send text
+
+client = Elasticsearch(
+    "https://backend-cbc16a.es.us-east-1.aws.elastic.cloud:443",
+    api_key="cnNscWdKUUJUYU9HemY3UTJ5aG86UXl6VGNpWmRUTXVKSXB6c1poVUNvQQ=="
+)
+
+index_name = "search-backend"
+
+# docs = [
+#     {
+#         "text": extracted_text[0]
+#     },
+# ]
+
+# bulk_response = helpers.bulk(client, docs, index=index_name)
+# print(bulk_response)
+
+
+response = client.search(
+    index = index_name,
+    body = {
+        "query": {
+            "match": {
+                "text":  "Black Holes"
+            }
+        }
+
+    }
+)
+
+print(response['hits']['hits'])  # Print the documents found

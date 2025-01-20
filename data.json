@@ -1,0 +1,13 @@
+{
+    "name": "Alec Overman",
+    "age": 25,
+    "skills": [
+        "Python",
+        "JavaScript",
+        "Data Analysis"
+    ],
+    "project": {
+        "name": "PDF to Database",
+        "status": "In Progress"
+    }
+}
