@@ -7,8 +7,8 @@ import feedparser
 from elasticsearch import Elasticsearch
 
 # ✅ Load Elasticsearch credentials from environment variables
-ES_URL = os.getenv("ELASTICSEARCH_URL")  # Set this in Render
-ES_API_KEY = os.getenv("ELASTICSEARCH_API_KEY")  # Set this in Render
+ES_URL = os.getenv("http_elastic")  # Set this in Render
+ES_API_KEY = os.getenv("key_elastic")  # Set this in Render
 
 # ✅ Initialize Elasticsearch client securely
 es = Elasticsearch(ES_URL, api_key=ES_API_KEY)
