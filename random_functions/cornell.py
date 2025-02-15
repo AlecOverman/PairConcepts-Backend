@@ -96,7 +96,7 @@ def stream_and_index_latex_source(paper):
                 # ✅ Index the combined document into Elasticsearch
                 es.index(index="arxiv_sources", id=paper_id, document=doc)
                 # print(f"✅ Indexed LaTeX source and metadata for {paper_id}")
-            else:
+            else: 
                 print(f"⚠️ No LaTeX content found for {paper_id}")
 
         except Exception as e:
