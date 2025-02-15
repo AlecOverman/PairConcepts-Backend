@@ -29,84 +29,118 @@ def process_pdf(pdf_filename):
     pdf_path = os.path.join(os.getcwd(), pdf_filename)
     if os.path.exists(pdf_path):
         text = ocr_on_pdf(pdf_path)
-        return tokenize_tag(text, pdf_filename)
+        return process_and_send_tokens(text,pdf_filename)
     else:
         raise FileNotFoundError(f"PDF file {pdf_filename} not found in the project directory.")
 
 
-def tokenize_tag(extracted_text, title):
+
+# def process_and_send_tokens(extracted_text, title):
+#     nlp = spacy.load("en_core_web_sm")
+#     doc = nlp(extracted_text)
+
+#     # Store categorized entities with positions grouped by their text
+#     categorized_entities = {}
+
+#     for ent in doc.ents:
+#         if ent.label_ not in categorized_entities:
+#             categorized_entities[ent.label_] = {}
+
+#         if ent.text not in categorized_entities[ent.label_]:
+#             categorized_entities[ent.label_][ent.text] = []
+
+#         # Append the start and end positions for the entity
+#         categorized_entities[ent.label_][ent.text].append({
+#             "title": title,
+#             "start_pos": ent.start_char,
+#             "end_pos": ent.end_char
+#         })
+
+
+#     return extracted_text, categorized_entities
+
+def process_and_send_tokens(extracted_text, title):
     nlp = spacy.load("en_core_web_sm")
     doc = nlp(extracted_text)
 
-    # Store categorized entities with positions grouped by their text
-    categorized_entities = {}
+    # Initialize the list of docs
+    docs = []
 
+    # Iterate through the entities and format the output
     for ent in doc.ents:
-        if ent.label_ not in categorized_entities:
-            categorized_entities[ent.label_] = {}
+        # Check if the entity already exists in the docs list
+        token_exists = False
+        for doc_item in docs:
+            if doc_item["token"] == ent.text:
+                # If it exists, append the item
+                doc_item["items"].append({
+                    "source": title,
+                    "start_pos": ent.start_char,
+                    "end_pos": ent.end_char
+                })
+                token_exists = True
+                break
+        
+        # If the entity is not found in docs, create a new entry
+        if not token_exists:
+            docs.append({
+                "items": [{
+                    "source": title,
+                    "start_pos": ent.start_char,
+                    "end_pos": ent.end_char
+                }],
+                "token": ent.text
+            })
 
-        if ent.text not in categorized_entities[ent.label_]:
-            categorized_entities[ent.label_][ent.text] = []
-
-        # Append the start and end positions for the entity
-        categorized_entities[ent.label_][ent.text].append({
-            "title": title,
-            "start_pos": ent.start_char,
-            "end_pos": ent.end_char
-        })
-
-    # Convert categorized entities into JSON format
-    categorized_entities_json = json.dumps(categorized_entities, indent=4)
-
-    return extracted_text, categorized_entities_json
-
-
-
+    return extracted_text, docs
+    
 def get_substring_at_positions(text, start_pos, end_pos):
     if start_pos < 0 or end_pos > len(text) or start_pos > end_pos:
         raise ValueError("Start or end position is out of bounds.")
     return text[start_pos:end_pos]
 
-# def ent_return(doc, test_value):
-
 
 # test_string = "Hello my name is Alec and im a student at UCR. i HAVE  a friend who use to go to UCR, his name is Michael. Michael is a cool dude. His name is Michael"
 pdf_filename = 'Blackholes-test00.pdf'
-# extracted_text = process_pdf(pdf_filename)
 
-#this will be able to retireve the char at a position
-# print(get_substring_at_positions(extracted_text[0], 50181, 50184))
-# print(extracted_text[1])
+process_pdf_results = process_pdf(pdf_filename)
 
-# This will be the elastic portion to send text
+token_list = process_pdf_results[1]
+extracted_text = process_pdf_results[0]
 
+
+
+
+# ************************************ #
+# This will be for Elastic [Important] #
+# ************************************ #
 client = Elasticsearch(
-    "https://backend-cbc16a.es.us-east-1.aws.elastic.cloud:443",
-    api_key="cnNscWdKUUJUYU9HemY3UTJ5aG86UXl6VGNpWmRUTXVKSXB6c1poVUNvQQ=="
+    "https://my-elasticsearch-project-bd33e8.es.us-east-1.aws.elastic.cloud:443",
+    api_key="RVVXcTU1UUJBU0VQOE1LbkFrYUY6ek5hMFNxd3hTZkdUaGRNQWszYU9oQQ=="
 )
 
-index_name = "search-backend"
+# index_name = "search-backend"
+token_index_name = "tokens"
 
-# docs = [
-#     {
-#         "text": extracted_text[0]
-#     },
-# ]
-
-# bulk_response = helpers.bulk(client, docs, index=index_name)
-# print(bulk_response)
-
-
-response = client.search(
-    index = index_name,
-    body = {
-        "query": {
-            "match": {
-                "text":  "Black Holes"
-            }
-        }
-
+# Define the mapping
+mappings = {
+  "properties": {
+    "token": {
+      "type": "text"
+    },
+    "items": {  # Define 'items' as a field in the root properties
+      "type": "nested",
+      "properties": {
+        "source": { "type": "text" },
+        "start_pos": { "type": "integer" },
+        "end_pos": { "type": "integer" }
+      }
     }
-)
+  }
+}
 
-print(response['hits']['hits'])  # Print the documents found
+mapping_response = client.indices.put_mapping(index=token_index_name, body=mappings)
+print(mapping_response)
+
+
+
