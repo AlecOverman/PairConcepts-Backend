@@ -2,23 +2,9 @@ import os
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 import urllib.parse
 import json
-from elasticsearch import Elasticsearch
 
 from functions.arxiv import fetch_arxiv_papers
-
-# ✅ Load Elasticsearch credentials from environment variables
-ES_URL = os.getenv("http_elastic")  # Set this in Render
-ES_API_KEY = os.getenv("key_elastic")  # Set this in Render
-
-# ✅ Initialize Elasticsearch client securely
-es = Elasticsearch(ES_URL, api_key=ES_API_KEY)
-
-index_name = "arxiv_sources"
-
-# Ensure index exists before inserting documents
-if not es.indices.exists(index=index_name):
-    es.indices.create(index=index_name)
-
+from functions.elastic_api import get_elastic
 
 class MyHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -43,6 +29,24 @@ class MyHandler(SimpleHTTPRequestHandler):
             self.send_header("Content-type", "application/json")
             self.end_headers()
             self.wfile.write(response_body.encode("utf-8"))
+
+        elif path == "/elastic_api":
+            # Get query and max_results from the URL parameters
+            query = query_params.get("query", ["Blackholes"])[0]
+            max_results = int(query_params.get("max_results", [5])[0])
+
+            # Call the get_elastic function with the parameters
+            elastic_fetch = get_elastic(query, max_results)
+            print(elastic_fetch)  # Debugging line
+
+            # Convert result to JSON string
+            response_body = json.dumps(elastic_fetch, indent=2)
+
+            self.send_response(200)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(response_body.encode("utf-8"))  # Send response
+
 
         else:
             self.send_error(404, "Not Found")
