@@ -45,7 +45,7 @@ def fetch_arxiv_papers(query="Blackholes", max_results=100):
         }
         papers.append(paper)
 
-    return papers
+    return feed
 
 
 def stream_and_index_latex_source(paper):

@@ -5,6 +5,9 @@ import json
 
 from functions.arxiv import fetch_arxiv_papers
 from functions.elastic_api import get_elastic
+from functions.elastic_api import  token_search
+from functions.elastic_api import turn_to_text
+from functions.elastic_api import elastic_to_elastic
 
 class MyHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
@@ -46,6 +49,39 @@ class MyHandler(SimpleHTTPRequestHandler):
             self.send_header("Content-type", "application/json")
             self.end_headers()
             self.wfile.write(response_body.encode("utf-8"))  # Send response
+
+        elif path == "/elastic_search":
+            # Get query and max_results from the URL parameters
+
+            # Call the get_elastic function with the parameters
+            elastic_fetch =  token_search()
+            print(elastic_fetch)  # Debugging line
+
+
+            # Convert result to JSON string
+            response_body = json.dumps(elastic_fetch, indent=2)
+
+            self.send_response(200)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(response_body.encode("utf-8"))  # Send response
+
+        elif path == "/turn_to_text":
+            # Get query and max_results from the URL parameters
+
+            # Call the get_elastic function with the parameters
+            elastic_fetch =  turn_to_text()
+            # print(elastic_fetch)  # Debugging line
+
+
+            # Convert result to JSON string
+            response_body = json.dumps(elastic_fetch, indent=2)
+
+            self.send_response(200)
+            self.send_header("Content-type", "application/json")
+            self.end_headers()
+            self.wfile.write(response_body.encode("utf-8"))  # Send response
+
 
 
         else:

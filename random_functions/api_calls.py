@@ -23,3 +23,4 @@ for match in response['matches']:
     print("ID:", match['id'])  # ID of the closest vector
     print("Score:", match['score'])  # Similarity score
     print("Metadata:", match['metadata'])  # Metadata associated with the vector
+    
