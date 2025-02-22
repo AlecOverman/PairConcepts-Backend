@@ -76,3 +76,50 @@
     #         helpers.bulk(destination_es, actions)
 
     #     return "Data transferred successfully!"
+
+
+# This will help transform the latex source into text form
+# def latex_to_text():
+
+#     # Fetch documents
+#     res = es.search(index=index_name, body={"query": {"match_all": {}}}, size=1000)  # Fetch up to 1000 documents
+#     docs = res["hits"]["hits"]
+
+#     actions = []
+#     for doc in docs:
+#         try:
+#             if "_source" in doc and "latex_source" in doc["_source"]:
+#                 # Convert LaTeX to plain text
+#                 plain_text = LatexNodes2Text().latex_to_text(doc["_source"]["latex_source"])
+                
+#                 # Prepare bulk update action
+#                 actions.append({
+#                     "_op_type": "update",
+#                     "_index": index_name,
+#                     "_id": doc["_id"],
+#                     "doc": {"latex_source": plain_text}
+#                 })
+#         except Exception as e:
+#             print(f"Error processing document {doc['_id']}: {e}")
+
+#     # Perform bulk update
+#     if actions:
+#         success, failed = helpers.bulk(es, actions)
+#         print(f"Successfully updated {success} documents. Failed: {failed}")
+
+# This is the api call to turn to text from main
+        # elif path == "/turn_to_text":
+        #     # Get query and max_results from the URL parameters
+
+        #     # Call the get_elastic function with the parameters
+        #     elastic_fetch =  turn_to_text()
+        #     # print(elastic_fetch)  # Debugging line
+
+
+        #     # Convert result to JSON string
+        #     response_body = json.dumps(elastic_fetch, indent=2)
+
+        #     self.send_response(200)
+        #     self.send_header("Content-type", "application/json")
+        #     self.end_headers()
+        #     self.wfile.write(response_body.encode("utf-8"))  # Send response

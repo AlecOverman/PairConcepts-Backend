@@ -4,12 +4,16 @@ from pylatexenc.latex2text import LatexNodes2Text
 import spacy
 
 
-def get_elastic(query="Blackholes", max_results=5):
-    ES_URL = "https://my-elasticsearch-project-cdb29f.es.us-east-1.aws.elastic.cloud:443"
-    ES_API_KEY = "https://my-elasticsearch-project-cdb29f.es.us-east-1.aws.elastic.cloud:443"  
+# Connect to Elasticsearch
+ES_URL = "https://my-elasticsearch-project-cdb29f.es.us-east-1.aws.elastic.cloud:443"
+ES_API_KEY = "TWNNeEw1VUJVcEs4d3RkMDNzMlA6dldaUE5MbmlfNkxHbkcydW9Vd1g5Zw=="  
 
-    es = Elasticsearch(ES_URL, api_key=ES_API_KEY)
-    index_name = "arxiv_sources"
+es = Elasticsearch(ES_URL, api_key=ES_API_KEY)
+index_name = "arxiv_sources"
+token_index = "tokens"
+
+
+def get_elastic(query="Blackholes", max_results=5):
 
     if not es.indices.exists(index=index_name):
         es.indices.create(index=index_name)
@@ -33,30 +37,7 @@ def get_elastic(query="Blackholes", max_results=5):
     except Exception as e:
         return {"error": str(e)}
 
-
-def extract_full_sentence(text, start, end):
-    """
-    Expands a substring to capture the full sentence.
-    """
-    # Define sentence-ending punctuation
-    sentence_endings = r"[.!?]"
-    
-    # Expand start position to the beginning of the sentence
-    while start > 0 and not re.match(sentence_endings, text[start - 1]):
-        start -= 1
-
-    # Expand end position to the end of the sentence
-    while end < len(text) and not re.match(sentence_endings, text[end - 1]):
-        end += 1
-
-    # Ensure we capture the full sentence
-    return text[start:end].strip()
-
-
 def token_search():
-    ES_URL = "https://my-elasticsearch-project-cdb29f.es.us-east-1.aws.elastic.cloud:443"
-    ES_API_KEY = "https://my-elasticsearch-project-cdb29f.es.us-east-1.aws.elastic.cloud:443"    
-    index_name = "arxiv_sources"
 
     # Hardcoded test search params (a list of dictionaries)
     search_params = [
@@ -69,7 +50,6 @@ def token_search():
         }
     ]
     
-    es = Elasticsearch(ES_URL, api_key=ES_API_KEY)
     results = []
 
     for item in search_params:
@@ -108,15 +88,7 @@ def token_search():
 
 # By next week I want to be able to send to open ai to get text back from the given input, Ill send source summery and the sentences and see if they are related or just how the text is used
 
-
 def turn_to_text():
-    # Connect to Elasticsearch
-    ES_URL = "https://my-elasticsearch-project-cdb29f.es.us-east-1.aws.elastic.cloud:443"
-    ES_API_KEY = "https://my-elasticsearch-project-cdb29f.es.us-east-1.aws.elastic.cloud:443"  
-
-    es = Elasticsearch(ES_URL, api_key=ES_API_KEY)
-    index_name = "arxiv_sources"
-    token_index = "tokens"
     
     # Load spaCy model
     nlp = spacy.load("en_core_web_sm")
@@ -180,41 +152,61 @@ def turn_to_text():
         success, failed = helpers.bulk(es, bulk_actions)
         print(f"Successfully indexed {success} token documents. Failed: {failed}")
 
+def get_tokens(query="blackholes", max_results=1):
+
+    if not es.indices.exists(index=token_index):
+        return {"message": "Index didn't exist but was created"}
+
+    # Perform search query on Elasticsearch
+    query_body = {
+        "query": {
+            "match": {
+                "token": query  # Searching by paper title
+            }
+        },
+        "size": max_results  # Limit results
+    }
+
+    try:
+        response = es.search(index=token_index, body=query_body)
+        hits = response['hits']['hits']
+        results = [
+            {
+                "id": hit["_id"],
+                "sources": [
+                    {
+                        "source": s["source"],
+                        "positions": s["positions"]  # Keeps the full list of positions
+                    }
+                    for s in hit["_source"]["sources"]
+                ],
+                "token": hit["_source"].get("token", None)
+            }
+            for hit in hits
+        ]
 
 
-def latex_to_text():
-    # Connect to Elasticsearch
-    ES_URL = "https://my-elasticsearch-project-cdb29f.es.us-east-1.aws.elastic.cloud:443"
-    ES_API_KEY = "https://my-elasticsearch-project-cdb29f.es.us-east-1.aws.elastic.cloud:443"  
+        return results
+    except Exception as e:
+        return {"error": str(e)}
 
-    es = Elasticsearch(ES_URL, api_key=ES_API_KEY)
-    index_name = "arxiv_sources"
 
-    # Fetch documents
-    res = es.search(index=index_name, body={"query": {"match_all": {}}}, size=1000)  # Fetch up to 1000 documents
-    docs = res["hits"]["hits"]
+# def extract_full_sentence(tokens_source):
+#     """
+#     Expands a substring to capture the full sentence.
+#     """
+#     # Define sentence-ending punctuation
+#     sentence_endings = r"[.!?]"
+    
+#     # Expand start position to the beginning of the sentence
+#     while start > 0 and not re.match(sentence_endings, text[start - 1]):
+#         start -= 1
 
-    actions = []
-    for doc in docs:
-        try:
-            if "_source" in doc and "latex_source" in doc["_source"]:
-                # Convert LaTeX to plain text
-                plain_text = LatexNodes2Text().latex_to_text(doc["_source"]["latex_source"])
-                
-                # Prepare bulk update action
-                actions.append({
-                    "_op_type": "update",
-                    "_index": index_name,
-                    "_id": doc["_id"],
-                    "doc": {"latex_source": plain_text}
-                })
-        except Exception as e:
-            print(f"Error processing document {doc['_id']}: {e}")
+#     # Expand end position to the end of the sentence
+#     while end < len(text) and not re.match(sentence_endings, text[end - 1]):
+#         end += 1
 
-    # Perform bulk update
-    if actions:
-        success, failed = helpers.bulk(es, actions)
-        print(f"Successfully updated {success} documents. Failed: {failed}")
-
+#     # Ensure we capture the full sentence
+#     return text[start:end].strip()
 # You have the tokens and you have the full text and meta data. Now first extract the tokens use their source to go to the source and 
 
