@@ -188,6 +188,7 @@ def get_tokens(query="blackholes", max_results=1):
 
 
         return extract_full_sentence(results)
+        # return results
     except Exception as e:
         return {"error": str(e)}
 
@@ -201,19 +202,17 @@ def extract_full_sentence(data):
     # Define sentence-ending punctuation and sentence-starting characters
     sentence_endings = r"[.!?]"
     sentence_beginning = r"[.!?]"
-    
+
     results = []  # To store the structured results
-    
+
     for entry in data:
-        article_data = {
-            "sentences": []  # List to store full sentences for this article
-        }
-        
-        # Iterate through all sources in each entry
+        keyword = entry["token"]
         for source in entry["sources"]:
             source_id = source["source"]
             positions = source["positions"]
-            
+        
+
+
             # Query to get both the source text and metadata using the source_id
             query_body = {
                 "query": {
@@ -225,23 +224,25 @@ def extract_full_sentence(data):
 
             # Send the query to Elasticsearch for a specific index
             response = es.search(index=index_name, body=query_body)
-            
+
             # Check if there are hits in the response
             if response['hits']['total']['value'] > 0:
                 # Get the source text from the result
                 text = response['hits']['hits'][0]["_source"]["latex_source"]  # Assuming latex_source contains the full text
-                
-                # Extract metadata from the Elasticsearch result
-                source_data = response['hits']['hits'][0]["_source"]
-                article_data["published"] = source_data.get("published", "N/A")
-                article_data["source_url"] = source_data.get("source_url", "N/A")
-                article_data["summery"] = source_data.get("summery", "N/A")
-                article_data["title"] = source_data.get("title", "N/A")
-                article_data["authors"] = source_data.get("authors", [])
-                article_data["keyword"] = source_data.get("keyword", "N/A")
-                
+
+                # ✅ Initialize `article_data` here, so it resets for each source
+                article_data = {
+                    "sentences": [],  # List to store full sentences for this article
+                    "published": response['hits']['hits'][0]["_source"].get("published", "N/A"),
+                    "source_url": response['hits']['hits'][0]["_source"].get("source_url", "N/A"),
+                    "summery": response['hits']['hits'][0]["_source"].get("summery", "N/A"),
+                    "title": response['hits']['hits'][0]["_source"].get("title", "N/A"),
+                    "authors": response['hits']['hits'][0]["_source"].get("authors", []),
+                    "keyword": keyword
+                }
+
                 sentence_count = 0  # Counter for sentences
-                
+
                 for position in positions:
                     if sentence_count >= 5:  # Limit to 5 sentences
                         break
@@ -252,22 +253,20 @@ def extract_full_sentence(data):
                     # Expand start position to the beginning of the sentence
                     while start > 0 and not re.match(sentence_beginning, text[start - 1]):
                         start -= 1
-                    
+
                     # Expand end position to the end of the sentence
                     while end < len(text) and not re.match(sentence_endings, text[end]):
-                        end += 1[]
+                        end += 1
 
                     # Capture the full sentence and strip unnecessary spaces
                     sentence = text[start:end].strip()
                     article_data["sentences"].append(sentence)
                     sentence_count += 1
+
+                # ✅ Only append if sentences were found
+                if article_data["sentences"]:
+                    results.append(article_data)
             else:
                 print(f"No results found for source: {source_id}")
-        
-            # Add the article data to the results (only if sentences are found)
-            if article_data["sentences"]:
-                results.append(article_data)
-    
-    return results[0]
 
-
+    return results[1]
