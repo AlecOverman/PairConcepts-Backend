@@ -5,9 +5,71 @@ import os
 from google import genai
 
 
-def analyze_sentences_from_documents(input_file, output_file, api_key, model_name="gemini-2.0-flash"):
+client = genai.Client(api_key = "AIzaSyAeVKhK5vPnP2oYF683wfqdWjKS_6nrNI0")
+model_name="gemini-2.0-flash"
 
-    client = genai.Client(api_key=api_key)
+
+
+def user_input(input):
+    prompt = f"""
+    Using this input: {input},
+    give me either a JSON response structured like this which only gives me the pair concept present in tthe input if a pair-concept exists or if multiple exist:
+
+    [
+        {{
+            "pair-concept": "concept1"
+        }},
+        {{
+            "pair-concept": "concept2"
+        }}
+    ]
+
+    If a pair-concept does not exist, return this:
+
+    {{
+        "error": "no pair-concept found"
+    }}
+    """
+
+    # Generate the response using the model
+    response = client.models.generate_content(model=model_name, contents=prompt)
+    # print(response)
+
+    try:
+        # Access the 'candidates' list from the response
+        candidate = response.candidates[0]  # Access the first candidate
+        text = candidate.content.parts[0].text.strip()  # Extract the text from the first part
+
+        # Remove the markdown formatting (triple backticks)
+        cleaned_text = re.sub(r'```json\n|\n```', '', text)
+
+        # Directly parse the cleaned text content as JSON
+        pair_concepts = json.loads(cleaned_text)  # Assuming the model response is directly valid JSON
+
+        # Check if the response contains a list of pair-concept items
+        if isinstance(pair_concepts, list):
+            # Check if there's a single pair-concept that needs splitting
+            updated_pair_concepts = []
+            for pair in pair_concepts:
+                if "and" in pair.get("pair-concept", ""):  # Check for "and" indicating multiple concepts
+                    parts = pair["pair-concept"].split(" and ")
+                    for part in parts:
+                        updated_pair_concepts.append({"pair-concept": part.strip()})
+                else:
+                    updated_pair_concepts.append(pair)
+            
+            print(updated_pair_concepts)
+            return updated_pair_concepts
+        else:
+            print("Error: Expected a list of pair-concept items.")
+            return {"error": "Expected a list of pair-concept items."}
+
+    except (AttributeError, KeyError, json.JSONDecodeError) as e:
+        # Handle cases where the expected attributes or data are not available
+        print(f"Error extracting pair-concepts: {e}")
+        return {"error": "Failed to extract pair-concept"}
+
+def analyze_sentences_from_documents(input_file, output_file):
     """
     Analyzes sentences from a JSON file with document metadata using the Gemini API,
     including keyword definition based on sentence usage.
@@ -76,7 +138,7 @@ def analyze_sentences_from_documents(input_file, output_file, api_key, model_nam
 
 if __name__ == "__main__":
     # Replace with your actual API key
-    api_key = "AIzaSyAeVKhK5vPnP2oYF683wfqdWjKS_6nrNI0"  # Hardcoded API key here
+  # Hardcoded API key here
 
     # Path to the JSON file in the parent directory (project folder)
     # json_path = os.path.join('.', 'articles_data_blackholes_updated.json')  # '..' goes up one directory
@@ -85,4 +147,6 @@ if __name__ == "__main__":
     input_file = json_path  # Hardcoded input file path here.
     output_file = "analysis_results(breaking_the_ice).json"  # Hardcoded output file path here.
 
-    analyze_sentences_from_documents(input_file, output_file, api_key)
+    # analyze_sentences_from_documents(input_file, output_file)
+    input = user_input("search up this pair concept: Politcal anarchy")
+
