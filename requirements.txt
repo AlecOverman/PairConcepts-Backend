@@ -1,3 +1,7 @@
 requests
 feedparser
 elasticsearch
+pip install pyarrow
+pip install google-cloud
+pip install pyspark
+pip install -q -U google-genai
