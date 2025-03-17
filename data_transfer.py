@@ -269,3 +269,69 @@
 #         print(f"Successfully indexed {success} paper documents. Failed: {failed}")
 
 #     return "done!"
+
+
+
+
+
+
+
+
+
+
+
+
+
+        # elif path == "/get_tokens":
+        #     # Get query and max_results from the URL parameters
+
+        #     # Call the get_elastic function with the parameters
+        #     elastic_fetch =  get_tokens()
+        #     print(elastic_fetch)  # Debugging line
+
+
+        #     # Convert result to JSON string
+        #     response_body = json.dumps(elastic_fetch, indent=2)
+
+        #     self.send_response(200)
+        #     self.send_header("Content-type", "application/json")
+        #     self.end_headers(input_file, output_file, api_key, model_name="gemini-pro")
+        #     self.wfile.write(response_body.encode("utf-8"))  # Send response
+
+        # elif path == "/gemini":
+        #     # Get query and max_results from the URL parameters
+        #     api_key = "AIzaSyCDBXTa1xCwtjr2qCnCXwq1JeYXW_OBAMM" #Hardcoded API key here.
+
+        #     # Replace with your actual file paths
+        #     input_file = "articles_data_blackholes_updated.json" #Hardcoded input file path here.
+        #     output_file = "analysis_results.json" #Hardcoded output file path here.
+
+        #     # Call the get_elastic function with the parameters
+        #     elastic_fetch = analyze_sentences_from_documents(input_file, output_file, api_key, model_name="gemini-2.0")
+        #     print(elastic_fetch)  # Debugging line
+
+
+        #     # Convert result to JSON string
+        #     response_body = json.dumps(elastic_fetch, indent=2)
+
+        #     self.send_response(200)
+        #     self.send_header("Content-type", "application/json")
+        #     self.end_headers()
+        #     self.wfile.write(response_body.encode("utf-8"))  # Send response
+
+
+        # elif path == "/elastic_to_elastic":
+        #     # Get query and max_results from the URL parameters
+
+        #     # Call the get_elastic function with the parameters
+        #     elastic_fetch =  elastic_to_elastic()
+        #     # print(elastic_fetch)  # Debugging line
+
+
+        #     # Convert result to JSON string
+        #     response_body = json.dumps(elastic_fetch, indent=2)
+
+        #     self.send_response(200)
+        #     self.send_header("Content-type", "application/json")
+        #     self.end_headers()
+        #     self.wfile.write(response_body.encode("utf-8"))  # Send response

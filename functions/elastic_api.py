@@ -1,7 +1,7 @@
 
 import spacy
 from elasticsearch import Elasticsearch, helpers
-from .arxiv import fetch_arxiv_papers
+# from .arxiv import fetch_arxiv_papers
 import re
 from pylatexenc.latex2text import LatexNodes2Text
 
@@ -11,7 +11,7 @@ from pylatexenc.latex2text import LatexNodes2Text
 
 # Connect to Elasticsearch
 ES_URL = "https://da507f8d778a45289ccac8d865cfa1ff.us-east-2.aws.elastic-cloud.com:443"
-ES_API_KEY = "RS1NdGpaVUJESFRfaUVHMHNiN3Q6U3JxbF9uLXlTbGlwQ2d2MEQ2MV9EQQ=="  
+ES_API_KEY = "X19rcG9aVUJPRVhXTGR2eGpSZGU6SUxiaGFPb3dTTUcxTnBJNWdrMGExZw=="  
 
 es = Elasticsearch(ES_URL, api_key=ES_API_KEY)
 index_name = "arxiv_sources"
@@ -206,8 +206,6 @@ def latex_to_text():
 
     return id_list
 
-
-
 def check_duplicate_ids():
     """Checks for duplicate document IDs in the Elasticsearch index."""
     
@@ -234,3 +232,160 @@ def check_duplicate_ids():
 
     except Exception as e:
         return {"error": str(e)}
+
+
+def get_tokens(query="blackholes", max_results=1000, keyword = "blackholes"):
+    # Check if the Elasticsearch index exists
+    if not es.indices.exists(index=token_index):
+        return {"message": "Index didn't exist but was created"}
+
+
+    # Perform search query on Elasticsearch
+    query_body = {
+        "query": {
+            "match": {
+                "token": query
+            }
+        },
+        "size": max_results  # Limit results
+    }
+
+    try:
+        response = es.search(index=token_index, body=query_body)
+        hits = response['hits']['hits']
+        
+        # Process the search results into the desired format
+        results = [
+            {
+                "id": hit["_id"],
+                "sources": [
+                    {
+                        "source": s["source"],
+                        "positions": s["positions"]  # Keeps the full list of positions
+                    }
+                    for s in hit["_source"]["sources"]
+                ],
+                "token": hit["_source"].get("token", None)
+            }
+            for hit in hits
+        ]
+        
+        # Call extract_full_sentence with the formatted results
+        return extract_full_sentence(results, keyword)
+    
+    except Exception as e:
+            
+        # print("made it here")
+        return {"error": str(e)}
+
+def extract_full_sentence(data, keyword):
+    """
+    Expands a substring to capture the full sentence using positions from JSON.
+    Queries a specific index for the source text and metadata using the Elasticsearch client.
+    Limits to 5 sentences per article.
+    """
+    # Define sentence-ending punctuation and sentence-starting characters
+    pair_concept = keyword
+    sentence_endings = r"[.!?]"
+    sentence_beginning = r"[.!?]"
+    
+    results = []  # To store the structured results
+    
+    # Iterate through each entry in the data
+    for entry in data:
+        article_data = {
+            "sentences": []  # List to store full sentences for this article
+        }
+        
+        # Process each source within the entry
+        keyword = entry["token"]
+        for source in entry["sources"]:
+            source_id = source["source"]
+            positions = source["positions"]
+            
+            # Query to get the source text and metadata
+            query_body = {
+                "query": {
+                    "match": {
+                        "id": source_id
+                    }
+                }
+            }
+            
+            # Send the query to Elasticsearch for a specific index
+            response = es.search(index=index_name, body=query_body)
+            
+            # Check if there are hits in the response
+            if response['hits']['total']['value'] > 0:
+                # Get the source text from the result
+                text = response['hits']['hits'][0]["_source"]["latex_source"]
+                
+                # Extract metadata from the Elasticsearch result
+                source_data = response['hits']['hits'][0]["_source"]
+                
+                # Ensure 'authors' is a list, even if it's returned as a string
+                authors = source_data.get("authors", [])
+                if isinstance(authors, str):
+                    authors = [authors]  # Convert authors to a list if it's a string
+                
+                article_data["published"] = source_data.get("published", "N/A")
+                article_data["source_url"] = source_data.get("source_url", "N/A")
+                article_data["summary"] = source_data.get("summary", "N/A")
+                article_data["title"] = source_data.get("title", "N/A")
+                article_data["authors"] = authors  # Ensure authors is a list
+                article_data["keyword"] = pair_concept
+                
+                sentence_count = 0  # Counter for sentences
+                
+                # Loop over the positions to extract sentences
+                for position in positions:
+                    if sentence_count >= 5:  # Limit to 5 sentences
+                        break
+                    
+                    start = position  # Get the start and end positions for the substring
+                    end = position + len(keyword)
+                    
+                    # Expand start position to the beginning of the sentence
+                    while start > 0 and not re.match(sentence_beginning, text[start - 1]):
+                        start -= 1
+                    
+                    # Expand end position to the end of the sentence
+                    while end < len(text) and not re.match(sentence_endings, text[end]):
+                        end += 1
+                    
+                    # Capture the full sentence and strip unnecessary spaces
+                    sentence = text[start:end].strip()
+                    if pair_concept in sentence:  # Use 'in' to check if the keyword is in the sentence
+                        article_data["sentences"].append(sentence)
+                        sentence_count += 1
+
+        # Add the article data to the results only once per article, not per source
+        if article_data["sentences"]:  # If sentences are found
+            results.append(article_data)
+    
+    
+    return results if results else {"error": "No valid sentences found"}
+
+
+def tokenize_input(data):
+    # Load the spaCy model
+    nlp = spacy.load("en_core_web_sm")
+    
+    # Assuming data is a list of dictionaries with the key 'pair-concept'
+    for item in data:
+        if 'pair-concept' in item:
+            doc_spacy = nlp(item["pair-concept"])  # Tokenizing the 'pair-concept'
+            
+            # Iterate over the tokens in the doc and print them one by one
+    # print(item['pair-concept'])
+    # print(doc_spacy[0].text)
+    return get_tokens(doc_spacy[0].text, max_results=1000, keyword=item['pair-concept'])
+
+if __name__ == "__main__":
+    # Correct input: List of dictionaries
+    input_data = [{'pair-concept': 'wormhole'}]  # This is a Python list, not a string
+    
+    tokenize_input(input_data)  # Pass the list directly
+
+
+

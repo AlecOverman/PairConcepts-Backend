@@ -1,20 +1,24 @@
+
 import json
 import google.generativeai as genai
 import re
 import os
 from google import genai
+from elastic_api import tokenize_input
+import urllib.parse
 
+client = genai.Client(api_key="AIzaSyAeVKhK5vPnP2oYF683wfqdWjKS_6nrNI0")
+model_name = "gemini-2.0-flash"
 
-client = genai.Client(api_key = "AIzaSyAeVKhK5vPnP2oYF683wfqdWjKS_6nrNI0")
-model_name="gemini-2.0-flash"
-
-
-
-def user_input(input):
+def user_input(input=""):
+    # Decode the input and fix potential issues like extra characters
+    input = "=" + input
+    
+    # Improve the prompt to make the instructions clear and focus on pair-concepts
     prompt = f"""
-    Using this input: {input},
-    give me either a JSON response structured like this which only gives me the pair concept present in tthe input if a pair-concept exists or if multiple exist:
-
+    Using the following input: "{input}",
+    Please return a JSON response that contains a list of pair-concepts, like so:
+    
     [
         {{
             "pair-concept": "concept1"
@@ -23,63 +27,67 @@ def user_input(input):
             "pair-concept": "concept2"
         }}
     ]
-
-    If a pair-concept does not exist, return this:
-
+    
+    If no pair-concept exists in the input, return the following JSON:
+    
     {{
         "error": "no pair-concept found"
     }}
     """
 
-    # Generate the response using the model
-    response = client.models.generate_content(model=model_name, contents=prompt)
-    # print(response)
-
     try:
-        # Access the 'candidates' list from the response
-        candidate = response.candidates[0]  # Access the first candidate
-        text = candidate.content.parts[0].text.strip()  # Extract the text from the first part
+        # Generate the response using the model
+        response = client.models.generate_content(model=model_name, contents=prompt)
 
-        # Remove the markdown formatting (triple backticks)
+        print(response)
+        
+        # Access the first candidate's response text
+        candidate = response.candidates[0]
+        text = candidate.content.parts[0].text.strip()
+
+        # Clean the response by removing markdown formatting
         cleaned_text = re.sub(r'```json\n|\n```', '', text)
 
-        # Directly parse the cleaned text content as JSON
-        pair_concepts = json.loads(cleaned_text)  # Assuming the model response is directly valid JSON
+        # Parse the cleaned text as JSON
+        pair_concepts = json.loads(cleaned_text)
 
-        # Check if the response contains a list of pair-concept items
+        # If no pair-concepts are found, return an error response
+        if isinstance(pair_concepts, dict) and "error" in pair_concepts:
+            return pair_concepts  # Return the error message if no pair-concepts are found
+        
         if isinstance(pair_concepts, list):
-            # Check if there's a single pair-concept that needs splitting
+            # Ensure the response is a list of pair-concept objects
             updated_pair_concepts = []
             for pair in pair_concepts:
-                if "and" in pair.get("pair-concept", ""):  # Check for "and" indicating multiple concepts
+                if "and" in pair.get("pair-concept", ""):
+                    # Split pair-concept if "and" exists to handle multiple concepts
                     parts = pair["pair-concept"].split(" and ")
                     for part in parts:
                         updated_pair_concepts.append({"pair-concept": part.strip()})
                 else:
                     updated_pair_concepts.append(pair)
             
-            print(updated_pair_concepts)
-            return updated_pair_concepts
+            # If pair-concepts exist, send them off to the next function for further processing
+            tokenized_concepts = tokenize_input(updated_pair_concepts)  # Tokenizing the concepts
+            return analyze_sentences_from_documents(tokenized_concepts, "analysis_results(duhduh).json")
+
         else:
-            print("Error: Expected a list of pair-concept items.")
-            return {"error": "Expected a list of pair-concept items."}
+            return {"error": "Invalid response format received from the model."}
 
     except (AttributeError, KeyError, json.JSONDecodeError) as e:
-        # Handle cases where the expected attributes or data are not available
-        print(f"Error extracting pair-concepts: {e}")
+        # Handle errors in the response processing
+        print(f"Error processing response: {e}")
         return {"error": "Failed to extract pair-concept"}
 
-def analyze_sentences_from_documents(input_file, output_file):
+def analyze_sentences_from_documents(documents, output_file):
+    print(f"Type of documents input: {type(documents)}")  # Debugging line
     """
-    Analyzes sentences from a JSON file with document metadata using the Gemini API,
+    Analyzes sentences from a list of document objects (JSON) using the Gemini API,
     including keyword definition based on sentence usage.
     """
     try:
-        with open(input_file, 'r') as f:
-            documents = json.load(f)
-
         if not isinstance(documents, list):
-            raise ValueError("Input JSON should contain a list of document objects.")
+            raise ValueError("Input should be a list of document objects.")
 
         all_results = []
         for document in documents:
@@ -107,9 +115,6 @@ def analyze_sentences_from_documents(input_file, output_file):
             # Call to Gemini API
             response = client.models.generate_content(model=model_name, contents=prompt)
             
-            # Print the raw response for debugging
-            print("Response Text:", response.text)
-
             try:
                 # Parsing the response to extract JSON
                 json_start = response.text.find('{')
@@ -132,21 +137,7 @@ def analyze_sentences_from_documents(input_file, output_file):
         with open(output_file, 'w') as f:
             json.dump(all_results, f, indent=4)
 
+        return all_results
     except Exception as e:
         print(f"An error occurred: {e}")
-
-
-if __name__ == "__main__":
-    # Replace with your actual API key
-  # Hardcoded API key here
-
-    # Path to the JSON file in the parent directory (project folder)
-    # json_path = os.path.join('.', 'articles_data_blackholes_updated.json')  # '..' goes up one directory
-    json_path = os.path.join('.', 'breaking_the_ice.json')  # '..' goes up one directory
-    # Replace with your actual file paths
-    input_file = json_path  # Hardcoded input file path here.
-    output_file = "analysis_results(breaking_the_ice).json"  # Hardcoded output file path here.
-
-    # analyze_sentences_from_documents(input_file, output_file)
-    input = user_input("search up this pair concept: Politcal anarchy")
-
+        return str(e)

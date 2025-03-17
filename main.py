@@ -1,15 +1,16 @@
 import os
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), 'functions'))
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 import urllib.parse
 import json
 
 from functions.arxiv import fetch_arxiv_papers
 from functions.elastic_api import get_elastic
-# from functions.elastic_api import elastic_to_elastic
-# from random_functions.gemini_api import analyze_sentences_from_documents
 from functions.elastic_api import turn_to_text
-from functions.elastic_api import latex_to_text;
-from functions.elastic_api import check_duplicate_ids;
+from functions.elastic_api import latex_to_text
+from functions.elastic_api import check_duplicate_ids
+from functions.gemini_api import user_input
 
 class MyHandler(SimpleHTTPRequestHandler):
     def send_response(self, code, message=None):
@@ -35,6 +36,7 @@ class MyHandler(SimpleHTTPRequestHandler):
         parsed_path = urllib.parse.urlparse(self.path)
         path = parsed_path.path
         query_params = urllib.parse.parse_qs(parsed_path.query)
+        print(f"Parsed query params: {query_params}")
 
         # if path == "/":
         #     self.send_response(200)
@@ -128,6 +130,30 @@ class MyHandler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(response_body.encode("utf-8"))
 
+        elif path == "/gemini":
+            # Retrieve the input from the query parameters (for example, "?input=some_input")
+            input = query_params.get("input", [None])[0]
+            
+            # If no input is provided, return an error
+            if not input:
+                self.send_response(400)
+                self.send_header("Content-type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": "Missing input parameter"}).encode("utf-8"))
+                return
+
+            # Call the user_input function to process the input
+            papers = user_input(input)
+
+            # Prepare the JSON response body
+            response_body = json.dumps(papers, indent=2)
+
+            # Send the response header
+
+            # Send the response body (the JSON result)
+            self.wfile.write(response_body.encode("utf-8"))
+
+
         elif path == "/turn-to-text":
             # query = query_params.get("query", ["Blackholes"])[0]
             # max_results = int(query_params.get("max_results", [5])[0])
@@ -139,59 +165,7 @@ class MyHandler(SimpleHTTPRequestHandler):
             self.send_header("Content-type", "application/json")
             self.end_headers()
             self.wfile.write(response_body.encode("utf-8"))
-        # elif path == "/get_tokens":
-        #     # Get query and max_results from the URL parameters
 
-        #     # Call the get_elastic function with the parameters
-        #     elastic_fetch =  get_tokens()
-        #     print(elastic_fetch)  # Debugging line
-
-
-        #     # Convert result to JSON string
-        #     response_body = json.dumps(elastic_fetch, indent=2)
-
-        #     self.send_response(200)
-        #     self.send_header("Content-type", "application/json")
-        #     self.end_headers(input_file, output_file, api_key, model_name="gemini-pro")
-        #     self.wfile.write(response_body.encode("utf-8"))  # Send response
-
-        # elif path == "/gemini":
-        #     # Get query and max_results from the URL parameters
-        #     api_key = "AIzaSyCDBXTa1xCwtjr2qCnCXwq1JeYXW_OBAMM" #Hardcoded API key here.
-
-        #     # Replace with your actual file paths
-        #     input_file = "articles_data_blackholes_updated.json" #Hardcoded input file path here.
-        #     output_file = "analysis_results.json" #Hardcoded output file path here.
-
-        #     # Call the get_elastic function with the parameters
-        #     elastic_fetch = analyze_sentences_from_documents(input_file, output_file, api_key, model_name="gemini-2.0")
-        #     print(elastic_fetch)  # Debugging line
-
-
-        #     # Convert result to JSON string
-        #     response_body = json.dumps(elastic_fetch, indent=2)
-
-        #     self.send_response(200)
-        #     self.send_header("Content-type", "application/json")
-        #     self.end_headers()
-        #     self.wfile.write(response_body.encode("utf-8"))  # Send response
-
-
-        # elif path == "/elastic_to_elastic":
-        #     # Get query and max_results from the URL parameters
-
-        #     # Call the get_elastic function with the parameters
-        #     elastic_fetch =  elastic_to_elastic()
-        #     # print(elastic_fetch)  # Debugging line
-
-
-        #     # Convert result to JSON string
-        #     response_body = json.dumps(elastic_fetch, indent=2)
-
-        #     self.send_response(200)
-        #     self.send_header("Content-type", "application/json")
-        #     self.end_headers()
-        #     self.wfile.write(response_body.encode("utf-8"))  # Send response
 
 
 
