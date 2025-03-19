@@ -7,7 +7,9 @@ from google import genai
 from elastic_api import tokenize_input
 import urllib.parse
 
-client = genai.Client(api_key="AIzaSyAeVKhK5vPnP2oYF683wfqdWjKS_6nrNI0")
+api_key = os.getenv("gen_client")
+
+client = genai.Client(api_key=api_key)
 model_name = "gemini-2.0-flash"
 
 def user_input(input=""):
@@ -17,7 +19,7 @@ def user_input(input=""):
     # Improve the prompt to make the instructions clear and focus on pair-concepts
     prompt = f"""
     Using the following input: "{input}",
-    Please return a JSON response that contains a list of pair-concepts, like so:
+    Extract the exact phrase or sequence of words from the input that represents the primary concept or subject. Return this phrase as the value of the 'pair-concept' and make it singular not plural key in the following JSON format:
     
     [
         {{
@@ -39,7 +41,7 @@ def user_input(input=""):
         # Generate the response using the model
         response = client.models.generate_content(model=model_name, contents=prompt)
 
-        print(response)
+        # print(response)
         
         # Access the first candidate's response text
         candidate = response.candidates[0]
@@ -53,7 +55,7 @@ def user_input(input=""):
 
         # If no pair-concepts are found, return an error response
         if isinstance(pair_concepts, dict) and "error" in pair_concepts:
-            return pair_concepts  # Return the error message if no pair-concepts are found
+                    return []  # Return empty array if there's an error
         
         if isinstance(pair_concepts, list):
             # Ensure the response is a list of pair-concept objects
@@ -69,41 +71,41 @@ def user_input(input=""):
             
             # If pair-concepts exist, send them off to the next function for further processing
             tokenized_concepts = tokenize_input(updated_pair_concepts)  # Tokenizing the concepts
-            return analyze_sentences_from_documents(tokenized_concepts, "analysis_results(duhduh).json")
+            # print(tokenized_concepts)
+            data_new = analyze_sentences_from_documents(tokenized_concepts, "analysis_results(duhduh).json")
+            # print(data_new)
+            return data_new
 
         else:
             return {"error": "Invalid response format received from the model."}
 
     except (AttributeError, KeyError, json.JSONDecodeError) as e:
-        # Handle errors in the response processing
+        # Handle errors gracefully
         print(f"Error processing response: {e}")
-        return {"error": "Failed to extract pair-concept"}
+        return []  # Return an empty array in case of any error
 
 def analyze_sentences_from_documents(documents, output_file):
-    print(f"Type of documents input: {type(documents)}")  # Debugging line
-    """
-    Analyzes sentences from a list of document objects (JSON) using the Gemini API,
-    including keyword definition based on sentence usage.
-    """
+    # print(documents)
     try:
         if not isinstance(documents, list):
             raise ValueError("Input should be a list of document objects.")
-
+        
         all_results = []
         for document in documents:
             if not isinstance(document, dict) or "sentences" not in document:
                 raise ValueError("Each item in the input list should be a document object with a 'sentences' key.")
-
+            
+            # Continue processing and collect results
             sentences = document["sentences"]
-            keyword = document.get("keyword", "N/A")  # Get the keyword, or set to "N/A" if not present.
+            keyword = document.get("keyword", "N/A")
 
-            # Prepare the prompt for the Gemini API
             prompt = f"""
             You are given a JSON document. Your task is to modify the document in the following way:
 
-            1. Replace the 'sentences' section with a single, concise sentence (or multiple lines if needed) that clearly summarizes how the keyword '{keyword}' is used in the context of the document.
-            2. The new sentence should clearly describe the pair concept '{keyword}' and its usage in this document. It should be structured like a short paragraph, but focus on summarizing how '{keyword}' is represented throughout the document.
-            3. Ensure the response highlights the significance of the keyword in the context of the article, and provides a clear explanation of its role.
+            1. **Combine Duplicates**: If multiple entries have the same title and authors, combine them into a single entry.
+            2. **Summarize Usage**: Replace the contents inthe 'sentences' section with a single, concise sentence (or multiple lines if needed) that clearly summarizes how the '{keyword}' is being used in the sentence keep the same data structure.
+            3. **Focus on Conceptual Usage**: The new sentence should clearly describe the pair concept '{keyword}' and its conceptual role in the document.
+            4. **Highlight Significance**: Ensure the response highlights the significance of the keyword in the context of the article and provides a clear explanation of its role.
 
             Here is the original JSON document:
 
@@ -111,33 +113,25 @@ def analyze_sentences_from_documents(documents, output_file):
 
             The resulting sentence should look like: "The pair concept '{keyword}' is being used in this document to represent [explanation of usage]."
             """
-
-            # Call to Gemini API
+            
             response = client.models.generate_content(model=model_name, contents=prompt)
             
+            # Make sure the response is a list before appending
             try:
-                # Parsing the response to extract JSON
                 json_start = response.text.find('{')
                 json_end = response.text.rfind('}') + 1
                 json_string = response.text[json_start:json_end]
-
-                # Try loading the JSON from the string
                 analysis = json.loads(json_string)
-
-                # Append the analysis result directly to the all_results
                 all_results.append(analysis)
-
             except (json.JSONDecodeError, ValueError) as e:
-                title = document.get('title', 'Unknown Title')  # Default to 'Unknown Title' if key is missing
-                print(f"Error processing response for document: '{title}': {e}")
+                title = document.get('title', 'Unknown Title')
                 all_results.append({"error": f"Failed to parse Gemini response: {str(e)}", "original_title": title})
-                print(response.text)  # Print the raw response for debugging
 
-        # Save the results to the output file
-        with open(output_file, 'w') as f:
-            json.dump(all_results, f, indent=4)
+        # Ensure the results are always returned as a list
+        return all_results if isinstance(all_results, list) else []
 
-        return all_results
     except Exception as e:
         print(f"An error occurred: {e}")
-        return str(e)
+        return [{"ERROR": "Can not find results. If this is a mistake, report this issue:)"}]  # Return an empty list if there's an error
+    
+

@@ -1,21 +1,23 @@
-
+import os
 import spacy
 from elasticsearch import Elasticsearch, helpers
 # from .arxiv import fetch_arxiv_papers
 import re
 from pylatexenc.latex2text import LatexNodes2Text
+from collections import defaultdict
 
 
 
 
 
 # Connect to Elasticsearch
-ES_URL = "https://da507f8d778a45289ccac8d865cfa1ff.us-east-2.aws.elastic-cloud.com:443"
-ES_API_KEY = "X19rcG9aVUJPRVhXTGR2eGpSZGU6SUxiaGFPb3dTTUcxTnBJNWdrMGExZw=="  
+        # ✅ Load Elasticsearch credentials from environment variables
+ES_URL = os.getenv("http_elastic")  # Set this in Render
+ES_API_KEY = os.getenv("key_elastic")  # Set this in Render
 
 es = Elasticsearch(ES_URL, api_key=ES_API_KEY)
-index_name = "arxiv_sources"
-token_index = "tokens"
+index_name = os.getenv("doc_index")
+token_index =  os.getenv("tok_index")
 
 
 def get_elastic(query="Blackholes", max_results=5):
@@ -243,8 +245,10 @@ def get_tokens(query="blackholes", max_results=1000, keyword = "blackholes"):
     # Perform search query on Elasticsearch
     query_body = {
         "query": {
-            "match": {
-                "token": query
+            "wildcard": {
+                "token": {
+                    "value": f"*{query.replace(' ', '*')}*"  # Matches tokens containing "worm" and "holes"
+                }
             }
         },
         "size": max_results  # Limit results
@@ -252,6 +256,8 @@ def get_tokens(query="blackholes", max_results=1000, keyword = "blackholes"):
 
     try:
         response = es.search(index=token_index, body=query_body)
+        # print(response)
+        # print(response)
         hits = response['hits']['hits']
         
         # Process the search results into the desired format
@@ -277,7 +283,6 @@ def get_tokens(query="blackholes", max_results=1000, keyword = "blackholes"):
             
         # print("made it here")
         return {"error": str(e)}
-
 def extract_full_sentence(data, keyword):
     """
     Expands a substring to capture the full sentence using positions from JSON.
@@ -286,10 +291,19 @@ def extract_full_sentence(data, keyword):
     """
     # Define sentence-ending punctuation and sentence-starting characters
     pair_concept = keyword
+    print("This is the pair-concept: " + str(pair_concept) + "\n\n\n")
+    
     sentence_endings = r"[.!?]"
     sentence_beginning = r"[.!?]"
     
     results = []  # To store the structured results
+    
+    # Function to normalize strings by removing spaces, {, }, and /
+    def normalize_string(s):
+        return s.replace(" ", "").replace("{", "").replace("}", "").replace("/", "")
+    
+    # Normalize the pair_concept for comparison
+    normalized_pair_concept = normalize_string(pair_concept.lower())
     
     # Iterate through each entry in the data
     for entry in data:
@@ -355,37 +369,58 @@ def extract_full_sentence(data, keyword):
                     
                     # Capture the full sentence and strip unnecessary spaces
                     sentence = text[start:end].strip()
-                    if pair_concept in sentence:  # Use 'in' to check if the keyword is in the sentence
+                    
+                    # Normalize the sentence for comparison
+                    normalized_sentence = normalize_string(sentence.lower())
+                    
+                    # Check if the normalized pair_concept is in the normalized sentence
+                    if normalized_pair_concept in normalized_sentence:
                         article_data["sentences"].append(sentence)
                         sentence_count += 1
+                    # else:
+                    #     print("Pair concept: " + str(normalized_pair_concept) + " does not exist in this sentence \n\n\n")
+                    #     print("\n\nsentence:" + str(normalized_sentence))
 
         # Add the article data to the results only once per article, not per source
         if article_data["sentences"]:  # If sentences are found
             results.append(article_data)
     
+    return combine_duplicates(results) if results else {"error": "No valid sentences found"}
+
+def combine_duplicates(data):
+    combined_data = defaultdict(list)
+    for entry in data:
+        key = (entry["title"], tuple(entry["authors"]))  # Use title and authors as the key
+        combined_data[key].append(entry)
     
-    return results if results else {"error": "No valid sentences found"}
+    # Merge entries with the same key
+    merged_entries = []
+    for key, entries in combined_data.items():
+        merged_entry = entries[0]  # Start with the first entry
+        for entry in entries[1:]:
+            merged_entry["sentences"].extend(entry["sentences"])  # Combine sentences
+        merged_entries.append(merged_entry)
+    
+    return merged_entries
+
 
 
 def tokenize_input(data):
     # Load the spaCy model
+    print("This is the data: " + str(data) + "\n\n\n\n")
+
     nlp = spacy.load("en_core_web_sm")
     
-    # Assuming data is a list of dictionaries with the key 'pair-concept'
     for item in data:
         if 'pair-concept' in item:
-            doc_spacy = nlp(item["pair-concept"])  # Tokenizing the 'pair-concept'
-            
-            # Iterate over the tokens in the doc and print them one by one
-    # print(item['pair-concept'])
-    # print(doc_spacy[0].text)
+            doc_spacy = nlp(item["pair-concept"])  # Tokenizing the 'pair-concept' fix this
     return get_tokens(doc_spacy[0].text, max_results=1000, keyword=item['pair-concept'])
 
-if __name__ == "__main__":
-    # Correct input: List of dictionaries
-    input_data = [{'pair-concept': 'wormhole'}]  # This is a Python list, not a string
+# if __name__ == "__main__":
+#     # Correct input: List of dictionaries
+#     input_data = [{'pair-concept': 'wormhole'}]  # This is a Python list, not a string
     
-    tokenize_input(input_data)  # Pass the list directly
+#     tokenize_input(input_data)  # Pass the list directly
 
 
 
